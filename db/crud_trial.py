@@ -1,7 +1,9 @@
+from datetime import date
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import date
-from db.models import TrialUser, UserModes
+
+from db.models import TrialUser
 
 
 class TrialCrud:
@@ -15,9 +17,7 @@ class TrialCrud:
 
     async def add_trial_user(self, user_id: int, username: str):
         trial_user = TrialUser(
-            user_id=user_id,
-            user_name=username,
-            last_trial_start=date.today()
+            user_id=user_id, user_name=username, last_trial_start=date.today()
         )
 
         self.session.add(trial_user)

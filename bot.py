@@ -13,17 +13,18 @@ from aiogram.types import (
     MenuButtonCommands,
 )
 from dotenv import load_dotenv
-from db.db import AsyncSessionLocal, get_db
+
+from db.db import AsyncSessionLocal
 from tgbot.config import Config, load_config
 from tgbot.handlers import user_router
 from tgbot.handlers.admin import admin_router
 from tgbot.middlewares.config import ConfigMiddleware
 from tgbot.middlewares.db_session_middleware import DBSessionMiddleware
 from tgbot.services import broadcaster
-
 from utils import Scheduler
 
 load_dotenv()
+
 
 async def on_startup(bot: Bot, admin_ids: list[int]):
     commands = [
@@ -50,7 +51,7 @@ def setup_logging():
     logging.basicConfig(
         level=logging.INFO,
         format="%(filename)s:%(lineno)d #%(levelname)-8s "
-               "[%(asctime)s] - %(name)s - %(message)s",
+        "[%(asctime)s] - %(name)s - %(message)s",
     )
     logging.getLogger(__name__).info("Starting bot")
 
@@ -80,13 +81,10 @@ async def main():
     dp.include_router(admin_router)
     dp.include_router(user_router)
 
-
     ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
     scheduler = Scheduler(AsyncSessionLocal)
-    asyncio.create_task(
-        scheduler.run_daily_admin_report(bot, ADMIN_ID)
-    )
+    asyncio.create_task(scheduler.run_daily_admin_report(bot, ADMIN_ID))
 
     await on_startup(bot, [ADMIN_ID])
 

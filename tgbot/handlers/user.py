@@ -1,12 +1,15 @@
+import asyncio
 import os
-from datetime import date, timedelta, datetime
-from aiogram.types import CallbackQuery, FSInputFile, Message
-from aiogram import Bot, Dispatcher, F, Router, types
-from aiogram.fsm.context import FSMContext
-from aiogram.filters import Command, CommandObject, CommandStart
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from datetime import datetime, timedelta
+
+from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.filters import CommandObject, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import CallbackQuery, FSInputFile, Message
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.crud_link import LinkService
 from db.crud_referral import ReferralCrud
@@ -14,12 +17,13 @@ from db.crud_trial import TrialCrud
 from db.crud_user import UserCrud
 from db.models import UserModes
 from new_payment import PaymentUtils
-from tgbot.handlers.admin import admin_router
-from tgbot.keyboards.inline import first_start_keyboard, period_subscriptions, to_back_two, trail_button, to_back
-
-from aiogram.fsm.state import State, StatesGroup
-import asyncio
-
+from tgbot.keyboards.inline import (
+    first_start_keyboard,
+    period_subscriptions,
+    to_back,
+    to_back_two,
+    trail_button,
+)
 from utils import MOSCOW_TZ, notify_users_today
 
 user_router = Router()
@@ -41,6 +45,7 @@ class SendMessageStates(StatesGroup):
 class SubStates(StatesGroup):
     choosing_device = State()
 
+
 async def send_main_menu(
     *,
     session: AsyncSession,
@@ -50,7 +55,6 @@ async def send_main_menu(
 ):
     user_crud = UserCrud(session)
     ref_crud = ReferralCrud(session)
-
 
     user = await user_crud.get_user(user_id)
     if not user:
@@ -69,7 +73,7 @@ async def send_main_menu(
         f"🎁 Ваша скидка: <b>{discount}%</b>\n"
     )
 
-    video_path ="/usr/src/app/Files/1.mp4"
+    video_path = "/usr/src/app/Files/1.mp4"
     video = FSInputFile(video_path)
 
     await message.answer_video(
@@ -78,6 +82,7 @@ async def send_main_menu(
         reply_markup=first_start_keyboard(),
         parse_mode="HTML",
     )
+
 
 @user_router.message(F.video)
 async def get_file_id(message: Message):
@@ -144,7 +149,9 @@ async def subscriptions_handler(call: CallbackQuery):
 
 
 @user_router.callback_query(F.data.in_(["one_mouth", "six_mouth"]))
-async def handle_subscription(callback_query: CallbackQuery, state: FSMContext):
+async def handle_subscription(
+    callback_query: CallbackQuery, state: FSMContext
+):
     await callback_query.answer()
 
     try:
@@ -174,7 +181,9 @@ async def handle_subscription(callback_query: CallbackQuery, state: FSMContext):
 
 
 @user_router.message(SubStates.choosing_device)
-async def handle_device_input(message: Message, state: FSMContext, session: AsyncSession, bot: Bot):
+async def handle_device_input(
+    message: Message, state: FSMContext, session: AsyncSession, bot: Bot
+):
     user_id = message.from_user.id
     username = message.from_user.username or "anonymous"
     raw = (message.text or "").strip()
@@ -200,7 +209,7 @@ async def handle_device_input(message: Message, state: FSMContext, session: Asyn
             ref_crud=ref_crud,
             user_id=user_id,
             months=months,
-            device_count=device_count
+            device_count=device_count,
         )
     except Exception:
         await message.answer("❌ Ошибка при создании платежа.")
@@ -211,11 +220,10 @@ async def handle_device_input(message: Message, state: FSMContext, session: Asyn
     await bot.send_message(
         user_id,
         (
-            f'❗️После оплаты в течение минуты вам придёт ключ для подключения❗️\n\n'
+            f"❗️После оплаты в течение минуты вам придёт ключ для подключения❗️\n\n"
             f'<a href="{payment_url}">💰Оплатить💰</a>\n'
-
         ),
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
 
     # Фоновая задача проверки оплаты
@@ -226,7 +234,7 @@ async def handle_device_input(message: Message, state: FSMContext, session: Asyn
             username=username,
             months=months,
             device_count=device_count,
-            bot=bot
+            bot=bot,
         )
     )
 
@@ -267,18 +275,14 @@ async def get_test_link(call: CallbackQuery, bot: Bot, session: AsyncSession):
     )
 
     if not user:
-        user = UserModes(
-            user_id=user_id,
-            user_name=username
-        )
+        user = UserModes(user_id=user_id, user_name=username)
         session.add(user)
         await session.flush()
 
     trial_user = await trial_crud.get_trial_user(user_id)
     if trial_user:
         await call.message.answer(
-            "❌ Вы уже активировали пробный период.",
-            reply_markup=to_back()
+            "❌ Вы уже активировали пробный период.", reply_markup=to_back()
         )
         return
 
@@ -320,8 +324,6 @@ async def get_test_link(call: CallbackQuery, bot: Bot, session: AsyncSession):
     except Exception as e:
         print("[TRIAL ADMIN NOTIFY ERROR]:", e)
 
-from aiogram.filters import Command
-from tgbot.keyboards.inline import admin_panel
 
 
 
@@ -361,7 +363,9 @@ async def send_all(call: CallbackQuery, state: FSMContext):
 
 
 @user_router.message(BroadcastStates.waiting_for_message)
-async def process_broadcast_message(message: Message, state: FSMContext, bot: Bot, session: AsyncSession):
+async def process_broadcast_message(
+    message: Message, state: FSMContext, bot: Bot, session: AsyncSession
+):
     text = message.text
     user_crud = UserCrud(session)
     users = await user_crud.get_all_users()
@@ -431,8 +435,6 @@ async def back_to_menu(
     )
 
 
-
-
 @user_router.callback_query(F.data == "to_chek")
 async def admin_check_subscriptions(
     call: CallbackQuery,
@@ -453,5 +455,5 @@ async def admin_check_subscriptions(
     await call.message.answer(
         f"✅ Проверка завершена\n"
         f"📨 Уведомлено пользователей: <b>{count}</b>",
-        parse_mode="HTML"
+        parse_mode="HTML",
     )

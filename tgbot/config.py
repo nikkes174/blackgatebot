@@ -67,11 +67,7 @@ class TgBot:
 
         use_redis = env.bool("USE_REDIS", default=False)
 
-        return TgBot(
-            token=token,
-            admin_ids=admin_ids,
-            use_redis=use_redis
-        )
+        return TgBot(token=token, admin_ids=admin_ids, use_redis=use_redis)
 
 
 @dataclass

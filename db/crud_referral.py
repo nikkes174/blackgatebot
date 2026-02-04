@@ -1,4 +1,4 @@
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import Referral
@@ -18,7 +18,7 @@ class ReferralCrud:
         result = await self.session.execute(
             select(Referral).where(
                 Referral.user_id == user_id,
-                Referral.referrer_id == referrer_id
+                Referral.referrer_id == referrer_id,
             )
         )
         return result.scalars().first()
@@ -37,8 +37,9 @@ class ReferralCrud:
 
     async def get_user_ref_stats(self, user_id: int):
         result = await self.session.execute(
-            select(func.count(Referral.id))
-            .where(Referral.referrer_id == user_id)
+            select(func.count(Referral.id)).where(
+                Referral.referrer_id == user_id
+            )
         )
         ref_count = result.scalar() or 0
 
@@ -52,4 +53,3 @@ class ReferralCrud:
             discount = 0
 
         return ref_count, discount
-

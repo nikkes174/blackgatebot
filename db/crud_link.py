@@ -1,4 +1,4 @@
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import LinkModel
@@ -7,7 +7,6 @@ from db.models import LinkModel
 class LinkService:
     def __init__(self, session: AsyncSession):
         self.session = session
-
 
     async def get_link_random_kink(self):
         stmt = (
@@ -55,9 +54,6 @@ class LinkService:
             link.user_id = user_id
 
         await self.session.commit()
-
-
-
 
         for link in links:
             await self.session.refresh(link)

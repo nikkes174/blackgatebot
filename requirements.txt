@@ -8,6 +8,6 @@ gspread
 oauth2client
 sqlalchemy
 asyncpg
-alembic
+
 pytz
 python-dateutil

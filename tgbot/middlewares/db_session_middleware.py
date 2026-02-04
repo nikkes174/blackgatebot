@@ -1,6 +1,8 @@
-from typing import Callable, Dict, Any, Awaitable
+from collections.abc import Awaitable
+from typing import Any, Callable, Dict
+
 from aiogram import BaseMiddleware
-from sqlalchemy.ext.asyncio import AsyncSession
+
 
 class DBSessionMiddleware(BaseMiddleware):
     def __init__(self, session_factory):
@@ -13,14 +15,14 @@ class DBSessionMiddleware(BaseMiddleware):
         data: Dict[str, Any],
     ) -> Any:
 
-        async with self.session_factory() as session:   # <-- создаём сессию
+        async with self.session_factory() as session:  # <-- создаём сессию
             data["session"] = session
 
             try:
                 result = await handler(event, data)
-                await session.commit()                 # <-- commit правильно
+                await session.commit()  # <-- commit правильно
                 return result
 
             except Exception:
-                await session.rollback()               # <-- rollback обязательно await
+                await session.rollback()  # <-- rollback обязательно await
                 raise

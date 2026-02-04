@@ -1,8 +1,9 @@
 import asyncio
 from datetime import datetime, timedelta
+
 import pytz
 from aiogram import Bot
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from db.crud_user import UserCrud
 from tgbot.keyboards.inline import period_subscriptions
@@ -10,13 +11,7 @@ from tgbot.keyboards.inline import period_subscriptions
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
 
-import asyncio
-from datetime import datetime, timedelta
 import pytz
-from aiogram import Bot
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
-
-from db.crud_user import UserCrud
 
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
@@ -72,10 +67,8 @@ class Scheduler:
             await self.check_yesterday_expired(bot, admin_id)
 
 
-
-
-
 from aiogram.exceptions import TelegramForbiddenError
+
 
 async def notify_users_today(
     *,
@@ -133,7 +126,6 @@ async def notify_users_today(
                     notified += 1
 
         except TelegramForbiddenError:
-            # пользователь заблокировал бота — просто пропускаем
             continue
 
         except Exception as e:

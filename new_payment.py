@@ -23,9 +23,6 @@ class PaymentUtils:
 
         self.active_payment_users = set()
 
-    # ---------------------------------------------------------
-    # Проверка статуса платежа (СИНХРОННАЯ функция YooKassa)
-    # ---------------------------------------------------------
     def check_payment_status(self, payment_id: str):
         try:
             payment = Payment.find_one(payment_id)
@@ -36,10 +33,9 @@ class PaymentUtils:
     async def create_payment_async(self, payload: dict):
         return await asyncio.to_thread(Payment.create, payload)
 
-    # ---------------------------------------------------------
-    # Получить скидку по количеству рефералов
-    # ---------------------------------------------------------
-    async def get_discount_by_ref_count(self, ref_crud: ReferralCrud, user_id: int) -> int:
+    async def get_discount_by_ref_count(
+        self, ref_crud: ReferralCrud, user_id: int
+    ) -> int:
         ref_count, _ = await ref_crud.get_user_ref_stats(user_id)
 
         if ref_count >= 20:
@@ -50,22 +46,24 @@ class PaymentUtils:
             return 10
         return 0
 
-    # ---------------------------------------------------------
-    # Создание платежа
-    # ---------------------------------------------------------
-    async def create_payment(self, ref_crud: ReferralCrud, user_id: int, months: int, device_count: int):
+    async def create_payment(
+        self,
+        ref_crud: ReferralCrud,
+        user_id: int,
+        months: int,
+        device_count: int,
+    ):
         return_url = "https://t.me/BlackGateGuard_bot"
 
-        # ---- НОВАЯ ТАРИФНАЯ ЛОГИКА ----
         if months == 1:
-            # 1 месяц
+
             if device_count == 1:
                 base_price = 120
             else:
                 base_price = 100 * device_count
 
         elif months == 6:
-            # 6 месяцев
+
             if device_count == 1:
                 base_price = 500
             else:
@@ -73,13 +71,14 @@ class PaymentUtils:
 
         else:
             raise ValueError(f"Неизвестный срок подписки: {months}")
-        # --------------------------------
 
         discount = await self.get_discount_by_ref_count(ref_crud, user_id)
 
         amount = base_price * (100 - discount) / 100
         if amount <= 0:
-            raise RuntimeError("Сумма платежа равна 0 — YooKassa не принимает такие платежи.")
+            raise RuntimeError(
+                "Сумма платежа равна 0 — YooKassa не принимает такие платежи."
+            )
 
         payload = {
             "amount": {"value": f"{amount:.2f}", "currency": "RUB"},
@@ -97,12 +96,11 @@ class PaymentUtils:
         payment = await self.create_payment_async(payload)
         return payment.id, payment.confirmation.confirmation_url
 
-    # ---------------------------------------------------------
-    # Ожидание подтверждения оплаты
-    # ---------------------------------------------------------
     async def poll_payment(self, payment_id):
         for i in range(10):
-            status, metadata = await asyncio.to_thread(self.check_payment_status, payment_id)
+            status, metadata = await asyncio.to_thread(
+                self.check_payment_status, payment_id
+            )
 
             if status == "succeeded":
                 return True, metadata
@@ -112,13 +110,13 @@ class PaymentUtils:
         return False, None
 
     async def check_payment_loop(
-            self,
-            payment_id: str,
-            user_id: int,
-            username: str,
-            months: int,
-            device_count: int,
-            bot,
+        self,
+        payment_id: str,
+        user_id: int,
+        username: str,
+        months: int,
+        device_count: int,
+        bot,
     ):
         if user_id in self.active_payment_users:
             return
@@ -136,32 +134,32 @@ class PaymentUtils:
 
                 user = await user_crud.get_user(user_id)
 
-                # Создаем пользователя если его нет
                 if not user:
-                    user = await user_crud.add_user(user_id=user_id, user_name=username)
+                    user = await user_crud.add_user(
+                        user_id=user_id, user_name=username
+                    )
 
-                # Продлеваем подписку
                 await user_crud.update_date(user_id, months)
 
-                # Достаем текущие ключи
                 links = await link_service.get_user_links(user_id)
 
-                # Если ключей нет — пробуем выдать заново
                 if not links:
-                    links = await link_service.assign_links_to_user(user_id, device_count)
+                    links = await link_service.assign_links_to_user(
+                        user_id, device_count
+                    )
 
-                # Если ключи есть, но устройств стало больше — докидываем недостающие
                 if links and len(links) < device_count:
                     missing = device_count - len(links)
-                    extra_links = await link_service.assign_links_to_user(user_id, missing)
+                    extra_links = await link_service.assign_links_to_user(
+                        user_id, missing
+                    )
                     if extra_links:
                         links.extend(extra_links)
 
-                # Если после всех попыток ключей все равно нет — ошибка
                 if not links:
                     await bot.send_message(
                         user_id,
-                        "❌ Недостаточно доступных VPN-серверов. Свяжитесь с поддержкой."
+                        "❌ Недостаточно доступных VPN-серверов. Свяжитесь с поддержкой.",
                     )
                     return
 
@@ -186,7 +184,7 @@ class PaymentUtils:
                 try:
                     await bot.send_message(
                         user_id,
-                        "❌ Произошла ошибка при обработке вашей оплаты. Свяжитесь с администратором."
+                        "❌ Произошла ошибка при обработке вашей оплаты. Свяжитесь с администратором.",
                     )
                 except:
                     pass
