@@ -1,0 +1,35 @@
+version: '3.9'
+
+services:
+  bot:
+    build:
+      context: .
+    container_name: vpn_tgbot
+    working_dir: /usr/src/app/bot
+    command: python bot.py
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./Files:/usr/src/app/Files   # 👈 монтируем локальную папку внутрь контейнера
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: vpn_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5439:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

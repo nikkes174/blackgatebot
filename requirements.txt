@@ -1,0 +1,13 @@
+aiogram
+environs
+redis
+betterlogging
+yookassa
+python-dotenv
+gspread
+oauth2client
+sqlalchemy
+asyncpg
+alembic
+pytz
+python-dateutil

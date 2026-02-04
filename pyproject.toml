@@ -1,0 +1,19 @@
+[tool.black]
+line-length = 79
+target-version = ["py39"]
+
+[tool.isort]
+profile = "black"
+line_length = 79
+
+[tool.ruff]
+line-length = 79
+target-version = "py39"
+
+fix = true
+
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.isort]
+combine-as-imports = true

@@ -1,0 +1,29 @@
+# виртуальное окружение
+venv/
+.venv/
+
+# IDE и редакторы
+.idea/
+.vscode/
+
+# кэш python
+__pycache__/
+*.pyc
+*.pyo
+
+# system/OS
+.DS_Store
+Thumbs.db
+
+# git
+.git/
+.gitignore
+
+# логи
+*.log
+
+# документация
+README.md
+README.MD
+
+
