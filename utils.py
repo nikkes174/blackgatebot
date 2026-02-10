@@ -31,8 +31,8 @@ class Scheduler:
     async def check_yesterday_expired(self, bot: Bot, admin_id: int):
         async with self.session_maker() as session:
             yesterday = datetime.now(MOSCOW_TZ).date() - timedelta(days=1)
-            res = await session.execute(UserCrud.model_select_all())
-            users = res.scalars().all()
+            user_crud = UserCrud(session)
+            users = await user_crud.get_all_users()
 
             expired_paid = []
             expired_trial = []

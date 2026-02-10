@@ -24,6 +24,7 @@ from tgbot.keyboards.inline import (
     to_back_two,
     trail_button,
 )
+from tgbot.services.broadcaster import safe_broadcast
 from utils import MOSCOW_TZ, notify_users_today
 
 user_router = Router()
@@ -362,23 +363,36 @@ async def send_all(call: CallbackQuery, state: FSMContext):
     await state.set_state(BroadcastStates.waiting_for_message)
 
 
+
+from db.crud_user import UserCrud
+
 @user_router.message(BroadcastStates.waiting_for_message)
 async def process_broadcast_message(
-    message: Message, state: FSMContext, bot: Bot, session: AsyncSession
+    message: Message,
+    state: FSMContext,
+    bot: Bot,
+    session: AsyncSession,
 ):
     text = message.text
     user_crud = UserCrud(session)
+
     users = await user_crud.get_all_users()
 
-    sent = 0
-    for u in users:
-        try:
-            await bot.send_message(u.user_id, text)
-            sent += 1
-        except:
-            pass
+    stats = await safe_broadcast(
+        bot=bot,
+        users=users,
+        text=text,
+    )
 
-    await message.answer(f"Рассылка завершена. Отправлено: {sent}")
+    await message.answer(
+        "📨 <b>Рассылка завершена</b>\n\n"
+        f"👥 Всего пользователей: <b>{stats['total']}</b>\n"
+        f"✅ Отправлено: <b>{stats['sent']}</b>\n"
+        f"🚫 Заблокировали бота: <b>{stats['blocked']}</b>\n"
+        f"⚠️ Ошибки: <b>{stats['failed']}</b>",
+        parse_mode="HTML",
+    )
+
     await state.clear()
 
 

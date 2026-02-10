@@ -56,5 +56,5 @@ combined_output.txt
 get_project.py
 get_project_front.py
 vpn_utils.py
-
+migrate_pg_to_sqlite.py
 .env

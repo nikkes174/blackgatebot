@@ -68,3 +68,9 @@ class UserCrud:
     @staticmethod
     def model_select_all():
         return select(UserModes)
+
+    async def get_all_users(self):
+        result = await self.session.execute(
+            select(UserModes)
+        )
+        return result.scalars().all()

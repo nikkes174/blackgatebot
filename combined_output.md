@@ -30,17 +30,18 @@ from aiogram.types import (
     MenuButtonCommands,
 )
 from dotenv import load_dotenv
-from db.db import AsyncSessionLocal, get_db
+
+from db.db import AsyncSessionLocal
 from tgbot.config import Config, load_config
 from tgbot.handlers import user_router
 from tgbot.handlers.admin import admin_router
 from tgbot.middlewares.config import ConfigMiddleware
 from tgbot.middlewares.db_session_middleware import DBSessionMiddleware
 from tgbot.services import broadcaster
-
 from utils import Scheduler
 
 load_dotenv()
+
 
 async def on_startup(bot: Bot, admin_ids: list[int]):
     commands = [
@@ -67,7 +68,7 @@ def setup_logging():
     logging.basicConfig(
         level=logging.INFO,
         format="%(filename)s:%(lineno)d #%(levelname)-8s "
-               "[%(asctime)s] - %(name)s - %(message)s",
+        "[%(asctime)s] - %(name)s - %(message)s",
     )
     logging.getLogger(__name__).info("Starting bot")
 
@@ -97,13 +98,10 @@ async def main():
     dp.include_router(admin_router)
     dp.include_router(user_router)
 
-
     ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
     scheduler = Scheduler(AsyncSessionLocal)
-    asyncio.create_task(
-        scheduler.run_daily_admin_report(bot, ADMIN_ID)
-    )
+    asyncio.create_task(scheduler.run_daily_admin_report(bot, ADMIN_ID))
 
     await on_startup(bot, [ADMIN_ID])
 
@@ -122,11 +120,12 @@ if __name__ == "__main__":
 
 ```python
 import os
+
 from dotenv import load_dotenv
 
-
 load_dotenv()
-DB_URL = os.getenv('DB')
+DB_URL = os.getenv("DB")
+
 ```
 
 ## 📄 `get_project.py`
@@ -299,9 +298,6 @@ class PaymentUtils:
 
         self.active_payment_users = set()
 
-    # ---------------------------------------------------------
-    # Проверка статуса платежа (СИНХРОННАЯ функция YooKassa)
-    # ---------------------------------------------------------
     def check_payment_status(self, payment_id: str):
         try:
             payment = Payment.find_one(payment_id)
@@ -312,10 +308,9 @@ class PaymentUtils:
     async def create_payment_async(self, payload: dict):
         return await asyncio.to_thread(Payment.create, payload)
 
-    # ---------------------------------------------------------
-    # Получить скидку по количеству рефералов
-    # ---------------------------------------------------------
-    async def get_discount_by_ref_count(self, ref_crud: ReferralCrud, user_id: int) -> int:
+    async def get_discount_by_ref_count(
+        self, ref_crud: ReferralCrud, user_id: int
+    ) -> int:
         ref_count, _ = await ref_crud.get_user_ref_stats(user_id)
 
         if ref_count >= 20:
@@ -326,22 +321,24 @@ class PaymentUtils:
             return 10
         return 0
 
-    # ---------------------------------------------------------
-    # Создание платежа
-    # ---------------------------------------------------------
-    async def create_payment(self, ref_crud: ReferralCrud, user_id: int, months: int, device_count: int):
+    async def create_payment(
+        self,
+        ref_crud: ReferralCrud,
+        user_id: int,
+        months: int,
+        device_count: int,
+    ):
         return_url = "https://t.me/BlackGateGuard_bot"
 
-        # ---- НОВАЯ ТАРИФНАЯ ЛОГИКА ----
         if months == 1:
-            # 1 месяц
+
             if device_count == 1:
                 base_price = 120
             else:
                 base_price = 100 * device_count
 
         elif months == 6:
-            # 6 месяцев
+
             if device_count == 1:
                 base_price = 500
             else:
@@ -349,13 +346,14 @@ class PaymentUtils:
 
         else:
             raise ValueError(f"Неизвестный срок подписки: {months}")
-        # --------------------------------
 
         discount = await self.get_discount_by_ref_count(ref_crud, user_id)
 
         amount = base_price * (100 - discount) / 100
         if amount <= 0:
-            raise RuntimeError("Сумма платежа равна 0 — YooKassa не принимает такие платежи.")
+            raise RuntimeError(
+                "Сумма платежа равна 0 — YooKassa не принимает такие платежи."
+            )
 
         payload = {
             "amount": {"value": f"{amount:.2f}", "currency": "RUB"},
@@ -373,12 +371,11 @@ class PaymentUtils:
         payment = await self.create_payment_async(payload)
         return payment.id, payment.confirmation.confirmation_url
 
-    # ---------------------------------------------------------
-    # Ожидание подтверждения оплаты
-    # ---------------------------------------------------------
     async def poll_payment(self, payment_id):
         for i in range(10):
-            status, metadata = await asyncio.to_thread(self.check_payment_status, payment_id)
+            status, metadata = await asyncio.to_thread(
+                self.check_payment_status, payment_id
+            )
 
             if status == "succeeded":
                 return True, metadata
@@ -388,13 +385,13 @@ class PaymentUtils:
         return False, None
 
     async def check_payment_loop(
-            self,
-            payment_id: str,
-            user_id: int,
-            username: str,
-            months: int,
-            device_count: int,
-            bot,
+        self,
+        payment_id: str,
+        user_id: int,
+        username: str,
+        months: int,
+        device_count: int,
+        bot,
     ):
         if user_id in self.active_payment_users:
             return
@@ -412,32 +409,32 @@ class PaymentUtils:
 
                 user = await user_crud.get_user(user_id)
 
-                # Создаем пользователя если его нет
                 if not user:
-                    user = await user_crud.add_user(user_id=user_id, user_name=username)
+                    user = await user_crud.add_user(
+                        user_id=user_id, user_name=username
+                    )
 
-                # Продлеваем подписку
                 await user_crud.update_date(user_id, months)
 
-                # Достаем текущие ключи
                 links = await link_service.get_user_links(user_id)
 
-                # Если ключей нет — пробуем выдать заново
                 if not links:
-                    links = await link_service.assign_links_to_user(user_id, device_count)
+                    links = await link_service.assign_links_to_user(
+                        user_id, device_count
+                    )
 
-                # Если ключи есть, но устройств стало больше — докидываем недостающие
                 if links and len(links) < device_count:
                     missing = device_count - len(links)
-                    extra_links = await link_service.assign_links_to_user(user_id, missing)
+                    extra_links = await link_service.assign_links_to_user(
+                        user_id, missing
+                    )
                     if extra_links:
                         links.extend(extra_links)
 
-                # Если после всех попыток ключей все равно нет — ошибка
                 if not links:
                     await bot.send_message(
                         user_id,
-                        "❌ Недостаточно доступных VPN-серверов. Свяжитесь с поддержкой."
+                        "❌ Недостаточно доступных VPN-серверов. Свяжитесь с поддержкой.",
                     )
                     return
 
@@ -462,7 +459,7 @@ class PaymentUtils:
                 try:
                     await bot.send_message(
                         user_id,
-                        "❌ Произошла ошибка при обработке вашей оплаты. Свяжитесь с администратором."
+                        "❌ Произошла ошибка при обработке вашей оплаты. Свяжитесь с администратором.",
                     )
                 except:
                     pass
@@ -471,57 +468,15 @@ class PaymentUtils:
 
 ```
 
-## 📄 `test.py`
-
-```python
-import asyncio
-from aiogram import Bot
-from aiogram.client.default import DefaultBotProperties
-
-BOT_TOKEN = "7985681666:AAEnw1uIHhKQLA3paqKdYFPxV7QWzsJJ_Lk"
-
-USER_IDS = [
-
-
-    5650089980,
-    7282208453
-
-]
-
-MESSAGE_TEXT = (
-    "Здравствуйте, во время выполнения оплаты у нас были тестовые работы. Ваша ссылка на подключение заблокирована.Выполните оплату по новой."
-)
-
-
-async def main():
-    bot = Bot(
-        token=BOT_TOKEN,
-        default=DefaultBotProperties(parse_mode="HTML")
-    )
-
-    for user_id in USER_IDS:
-        try:
-            await bot.send_message(user_id, MESSAGE_TEXT)
-            print(f"✅ Отправлено: {user_id}")
-        except Exception as e:
-            print(f"❌ Ошибка {user_id}: {e}")
-
-    await bot.session.close()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
-
-```
-
 ## 📄 `utils.py`
 
 ```python
 import asyncio
 from datetime import datetime, timedelta
+
 import pytz
 from aiogram import Bot
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from db.crud_user import UserCrud
 from tgbot.keyboards.inline import period_subscriptions
@@ -529,13 +484,7 @@ from tgbot.keyboards.inline import period_subscriptions
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
 
-import asyncio
-from datetime import datetime, timedelta
 import pytz
-from aiogram import Bot
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
-
-from db.crud_user import UserCrud
 
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
@@ -555,8 +504,8 @@ class Scheduler:
     async def check_yesterday_expired(self, bot: Bot, admin_id: int):
         async with self.session_maker() as session:
             yesterday = datetime.now(MOSCOW_TZ).date() - timedelta(days=1)
-            res = await session.execute(UserCrud.model_select_all())
-            users = res.scalars().all()
+            user_crud = UserCrud(session)
+            users = await user_crud.get_all_users()
 
             expired_paid = []
             expired_trial = []
@@ -591,7 +540,7 @@ class Scheduler:
             await self.check_yesterday_expired(bot, admin_id)
 
 
-
+from aiogram.exceptions import TelegramForbiddenError
 
 
 async def notify_users_today(
@@ -607,48 +556,56 @@ async def notify_users_today(
     notified = 0
 
     for user in users:
-        end_d = user.end_date
-        end_t = user.end_trial_period
+        try:
+            end_d = user.end_date
+            end_t = user.end_trial_period
 
-        if end_d:
-            if end_d == today:
-                await bot.send_message(
-                    user.user_id,
-                    "⚠️ Сегодня последний день вашей подписки.\n"
-                    "Чтобы продолжить пользоваться сервисом — оформите продление.",
-                    reply_markup=period_subscriptions(),
-                )
-                notified += 1
+            if end_d:
+                if end_d == today:
+                    await bot.send_message(
+                        user.user_id,
+                        "⚠️ Сегодня последний день вашей подписки.\n"
+                        "Чтобы продолжить пользоваться сервисом — оформите продление.",
+                        reply_markup=period_subscriptions(),
+                    )
+                    notified += 1
 
-            elif end_d < today:
-                await bot.send_message(
-                    user.user_id,
-                    "❌ Ваша подписка закончилась.\n"
-                    "Чтобы восстановить доступ — оформите подписку.",
-                    reply_markup=period_subscriptions(),
-                )
-                notified += 1
+                elif end_d < today:
+                    await bot.send_message(
+                        user.user_id,
+                        "❌ Ваша подписка закончилась.\n"
+                        "Чтобы восстановить доступ — оформите подписку.",
+                        reply_markup=period_subscriptions(),
+                    )
+                    notified += 1
 
-        elif end_t:
-            if end_t == today:
-                await bot.send_message(
-                    user.user_id,
-                    "⚠️ Сегодня последний день пробного периода.\n"
-                    "Чтобы продолжить пользоваться сервисом — оформите подписку.",
-                    reply_markup=period_subscriptions(),
-                )
-                notified += 1
+            elif end_t:
+                if end_t == today:
+                    await bot.send_message(
+                        user.user_id,
+                        "⚠️ Сегодня последний день пробного периода.\n"
+                        "Чтобы продолжить пользоваться сервисом — оформите подписку.",
+                        reply_markup=period_subscriptions(),
+                    )
+                    notified += 1
 
-            elif end_t < today:
-                await bot.send_message(
-                    user.user_id,
-                    "❌ Пробный период завершён.\n"
-                    "Чтобы продолжить пользоваться сервисом — оформите подписку.",
-                    reply_markup=period_subscriptions(),
-                )
-                notified += 1
+                elif end_t < today:
+                    await bot.send_message(
+                        user.user_id,
+                        "❌ Пробный период завершён.\n"
+                        "Чтобы продолжить пользоваться сервисом — оформите подписку.",
+                        reply_markup=period_subscriptions(),
+                    )
+                    notified += 1
+
+        except TelegramForbiddenError:
+            continue
+
+        except Exception as e:
+            print(f"[NOTIFY ERROR] user={user.user_id}: {e}")
 
     return notified
+
 ```
 
 ## 📄 `vpn_utils.py`
@@ -818,7 +775,7 @@ class X3:
 ## 📄 `db\crud_link.py`
 
 ```python
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import LinkModel
@@ -827,7 +784,6 @@ from db.models import LinkModel
 class LinkService:
     def __init__(self, session: AsyncSession):
         self.session = session
-
 
     async def get_link_random_kink(self):
         stmt = (
@@ -876,9 +832,6 @@ class LinkService:
 
         await self.session.commit()
 
-
-
-
         for link in links:
             await self.session.refresh(link)
 
@@ -888,12 +841,13 @@ class LinkService:
         stmt = select(LinkModel).where(LinkModel.user_id == user_id)
         res = await self.session.execute(stmt)
         return res.scalars().all()
+
 ```
 
 ## 📄 `db\crud_referral.py`
 
 ```python
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import Referral
@@ -913,7 +867,7 @@ class ReferralCrud:
         result = await self.session.execute(
             select(Referral).where(
                 Referral.user_id == user_id,
-                Referral.referrer_id == referrer_id
+                Referral.referrer_id == referrer_id,
             )
         )
         return result.scalars().first()
@@ -932,8 +886,9 @@ class ReferralCrud:
 
     async def get_user_ref_stats(self, user_id: int):
         result = await self.session.execute(
-            select(func.count(Referral.id))
-            .where(Referral.referrer_id == user_id)
+            select(func.count(Referral.id)).where(
+                Referral.referrer_id == user_id
+            )
         )
         ref_count = result.scalar() or 0
 
@@ -948,16 +903,17 @@ class ReferralCrud:
 
         return ref_count, discount
 
-
 ```
 
 ## 📄 `db\crud_trial.py`
 
 ```python
+from datetime import date
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import date
-from db.models import TrialUser, UserModes
+
+from db.models import TrialUser
 
 
 class TrialCrud:
@@ -971,30 +927,26 @@ class TrialCrud:
 
     async def add_trial_user(self, user_id: int, username: str):
         trial_user = TrialUser(
-            user_id=user_id,
-            user_name=username,
-            last_trial_start=date.today()
+            user_id=user_id, user_name=username, last_trial_start=date.today()
         )
 
         self.session.add(trial_user)
         await self.session.flush()
 
         return trial_user
+
 ```
 
 ## 📄 `db\crud_user.py`
 
 ```python
+from datetime import date, datetime, timedelta
 from typing import Optional
-from datetime import datetime, timedelta, date
-
-from sqlalchemy import select
-
-from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import date
-from dateutil.relativedelta import relativedelta
 
 import pytz
+from dateutil.relativedelta import relativedelta
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import UserModes
 
@@ -1004,17 +956,17 @@ class UserCrud:
         self.session = session
 
     async def add_user(
-            self,
-            user_id: int,
-            user_name: str,
-            end_date: Optional[date] = None,
-            end_trial_period: Optional[date] = None
+        self,
+        user_id: int,
+        user_name: str,
+        end_date: Optional[date] = None,
+        end_trial_period: Optional[date] = None,
     ):
         user = UserModes(
             user_id=user_id,
             user_name=user_name,
             end_date=end_date,
-            end_trial_period=end_trial_period
+            end_trial_period=end_trial_period,
         )
 
         self.session.add(user)
@@ -1023,13 +975,17 @@ class UserCrud:
         return user
 
     async def get_user(self, user_id: int):
-        result = await self.session.execute(select(UserModes).where(UserModes.user_id == user_id))
+        result = await self.session.execute(
+            select(UserModes).where(UserModes.user_id == user_id)
+        )
         return result.scalars().first()
 
     async def update_date(self, user_id: int, month: int):
         user = await self.get_user(user_id)
 
-        user.end_date = datetime.now(pytz.timezone("Europe/Moscow")).date() + relativedelta(months=month)
+        user.end_date = datetime.now(
+            pytz.timezone("Europe/Moscow")
+        ).date() + relativedelta(months=month)
 
         await self.session.commit()
         await self.session.refresh(user)
@@ -1039,10 +995,9 @@ class UserCrud:
     async def update_trial(self, user_id: int):
         user = await self.get_user(user_id)
 
-        user.end_date = (
-                datetime.now(pytz.timezone("Europe/Moscow")).date()
-                + timedelta(days=3)
-        )
+        user.end_date = datetime.now(
+            pytz.timezone("Europe/Moscow")
+        ).date() + timedelta(days=3)
 
         await self.session.commit()
         await self.session.refresh(user)
@@ -1056,24 +1011,29 @@ class UserCrud:
     def model_select_all():
         return select(UserModes)
 
+    async def get_all_users(self):
+        result = await self.session.execute(
+            select(UserModes)
+        )
+        return result.scalars().all()
 ```
 
 ## 📄 `db\db.py`
 
 ```python
 from sqlalchemy.ext.asyncio import (
-    AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
+
 from config import DB_URL
 
 engine = create_async_engine(
     DB_URL,
     echo=False,
-    poolclass=NullPool,   # Важно!
+    poolclass=NullPool,  # Важно!
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -1082,8 +1042,10 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False,
 )
 
+
 class Base(DeclarativeBase):
     pass
+
 
 async def get_db():
     async with AsyncSessionLocal() as session:
@@ -1097,7 +1059,8 @@ async def get_db():
 from __future__ import annotations
 
 from typing import List, Optional
-from sqlalchemy import String, Date, BigInteger, ForeignKey, Integer, Float
+
+from sqlalchemy import BigInteger, Date, ForeignKey, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -1109,16 +1072,15 @@ class UserModes(Base):
     __tablename__ = "users"
 
     user_id: Mapped[int] = mapped_column(
-        BigInteger,
-        primary_key=True,
-        unique=True,
-        nullable=False
+        BigInteger, primary_key=True, unique=True, nullable=False
     )
     user_name: Mapped[Optional[str]] = mapped_column(String(255))
     end_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
-    end_trial_period: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    end_trial_period: Mapped[Optional[Date]] = mapped_column(
+        Date, nullable=True
+    )
 
-    links: Mapped[List["LinkModel"]] = relationship(
+    links: Mapped[List[LinkModel]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -1135,7 +1097,7 @@ class LinkModel(Base):
     user_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey("users.user_id", ondelete="CASCADE"),  # Ключевой момент
-        nullable=True
+        nullable=True,
     )
 
     user: Mapped[Optional[UserModes]] = relationship(back_populates="links")
@@ -1152,9 +1114,15 @@ class TrialUser(Base):
 class Referral(Base):
     __tablename__ = "referrals"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    referrer_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
-    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True)
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
+    referrer_id: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, unique=True
+    )
 
 ```
 
@@ -1246,11 +1214,7 @@ class TgBot:
 
         use_redis = env.bool("USE_REDIS", default=False)
 
-        return TgBot(
-            token=token,
-            admin_ids=admin_ids,
-            use_redis=use_redis
-        )
+        return TgBot(token=token, admin_ids=admin_ids, use_redis=use_redis)
 
 
 @dataclass
@@ -1333,11 +1297,9 @@ class AdminFilter(BaseFilter):
 ```python
 """Import all routers and add them to routers_list."""
 
-
 from .user import user_router
 
 routers_list = [
-
     user_router,
 ]
 
@@ -1351,6 +1313,7 @@ __all__ = [
 
 ```python
 import os
+
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -1359,9 +1322,7 @@ from tgbot.keyboards.inline import admin_panel
 
 admin_router = Router()
 
-ADMINS = [
-    int(x) for x in os.getenv("ADMINS", "").split(",") if x
-]
+ADMINS = [int(x) for x in os.getenv("ADMINS", "").split(",") if x]
 
 
 @admin_router.message(Command("admin_panel"))
@@ -1372,10 +1333,7 @@ async def open_admin_panel(message: Message):
         await message.answer("⛔️ Нет доступа")
         return
 
-    await message.answer(
-        "🛠 Панель администратора",
-        reply_markup=admin_panel()
-    )
+    await message.answer("🛠 Панель администратора", reply_markup=admin_panel())
 
 
 def is_admin(user_id: int) -> bool:
@@ -1416,15 +1374,18 @@ async def bot_echo_all(message: types.Message, state: FSMContext):
 ## 📄 `tgbot\handlers\user.py`
 
 ```python
+import asyncio
 import os
-from datetime import date, timedelta, datetime
-from aiogram.types import CallbackQuery, FSInputFile, Message
-from aiogram import Bot, Dispatcher, F, Router, types
-from aiogram.fsm.context import FSMContext
-from aiogram.filters import Command, CommandObject, CommandStart
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from datetime import datetime, timedelta
+
+from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.filters import CommandObject, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import CallbackQuery, FSInputFile, Message
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.crud_link import LinkService
 from db.crud_referral import ReferralCrud
@@ -1432,12 +1393,14 @@ from db.crud_trial import TrialCrud
 from db.crud_user import UserCrud
 from db.models import UserModes
 from new_payment import PaymentUtils
-from tgbot.handlers.admin import admin_router
-from tgbot.keyboards.inline import first_start_keyboard, period_subscriptions, to_back_two, trail_button, to_back
-
-from aiogram.fsm.state import State, StatesGroup
-import asyncio
-
+from tgbot.keyboards.inline import (
+    first_start_keyboard,
+    period_subscriptions,
+    to_back,
+    to_back_two,
+    trail_button,
+)
+from tgbot.services.broadcaster import safe_broadcast
 from utils import MOSCOW_TZ, notify_users_today
 
 user_router = Router()
@@ -1459,6 +1422,7 @@ class SendMessageStates(StatesGroup):
 class SubStates(StatesGroup):
     choosing_device = State()
 
+
 async def send_main_menu(
     *,
     session: AsyncSession,
@@ -1468,7 +1432,6 @@ async def send_main_menu(
 ):
     user_crud = UserCrud(session)
     ref_crud = ReferralCrud(session)
-
 
     user = await user_crud.get_user(user_id)
     if not user:
@@ -1487,7 +1450,7 @@ async def send_main_menu(
         f"🎁 Ваша скидка: <b>{discount}%</b>\n"
     )
 
-    video_path ="/usr/src/app/Files/1.mp4"
+    video_path = "/usr/src/app/Files/1.mp4"
     video = FSInputFile(video_path)
 
     await message.answer_video(
@@ -1496,6 +1459,7 @@ async def send_main_menu(
         reply_markup=first_start_keyboard(),
         parse_mode="HTML",
     )
+
 
 @user_router.message(F.video)
 async def get_file_id(message: Message):
@@ -1562,7 +1526,9 @@ async def subscriptions_handler(call: CallbackQuery):
 
 
 @user_router.callback_query(F.data.in_(["one_mouth", "six_mouth"]))
-async def handle_subscription(callback_query: CallbackQuery, state: FSMContext):
+async def handle_subscription(
+    callback_query: CallbackQuery, state: FSMContext
+):
     await callback_query.answer()
 
     try:
@@ -1592,7 +1558,9 @@ async def handle_subscription(callback_query: CallbackQuery, state: FSMContext):
 
 
 @user_router.message(SubStates.choosing_device)
-async def handle_device_input(message: Message, state: FSMContext, session: AsyncSession, bot: Bot):
+async def handle_device_input(
+    message: Message, state: FSMContext, session: AsyncSession, bot: Bot
+):
     user_id = message.from_user.id
     username = message.from_user.username or "anonymous"
     raw = (message.text or "").strip()
@@ -1618,7 +1586,7 @@ async def handle_device_input(message: Message, state: FSMContext, session: Asyn
             ref_crud=ref_crud,
             user_id=user_id,
             months=months,
-            device_count=device_count
+            device_count=device_count,
         )
     except Exception:
         await message.answer("❌ Ошибка при создании платежа.")
@@ -1629,11 +1597,10 @@ async def handle_device_input(message: Message, state: FSMContext, session: Asyn
     await bot.send_message(
         user_id,
         (
-            f'❗️После оплаты в течение минуты вам придёт ключ для подключения❗️\n\n'
+            f"❗️После оплаты в течение минуты вам придёт ключ для подключения❗️\n\n"
             f'<a href="{payment_url}">💰Оплатить💰</a>\n'
-
         ),
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
 
     # Фоновая задача проверки оплаты
@@ -1644,7 +1611,7 @@ async def handle_device_input(message: Message, state: FSMContext, session: Asyn
             username=username,
             months=months,
             device_count=device_count,
-            bot=bot
+            bot=bot,
         )
     )
 
@@ -1685,18 +1652,14 @@ async def get_test_link(call: CallbackQuery, bot: Bot, session: AsyncSession):
     )
 
     if not user:
-        user = UserModes(
-            user_id=user_id,
-            user_name=username
-        )
+        user = UserModes(user_id=user_id, user_name=username)
         session.add(user)
         await session.flush()
 
     trial_user = await trial_crud.get_trial_user(user_id)
     if trial_user:
         await call.message.answer(
-            "❌ Вы уже активировали пробный период.",
-            reply_markup=to_back()
+            "❌ Вы уже активировали пробный период.", reply_markup=to_back()
         )
         return
 
@@ -1738,8 +1701,6 @@ async def get_test_link(call: CallbackQuery, bot: Bot, session: AsyncSession):
     except Exception as e:
         print("[TRIAL ADMIN NOTIFY ERROR]:", e)
 
-from aiogram.filters import Command
-from tgbot.keyboards.inline import admin_panel
 
 
 
@@ -1778,21 +1739,36 @@ async def send_all(call: CallbackQuery, state: FSMContext):
     await state.set_state(BroadcastStates.waiting_for_message)
 
 
+
+from db.crud_user import UserCrud
+
 @user_router.message(BroadcastStates.waiting_for_message)
-async def process_broadcast_message(message: Message, state: FSMContext, bot: Bot, session: AsyncSession):
+async def process_broadcast_message(
+    message: Message,
+    state: FSMContext,
+    bot: Bot,
+    session: AsyncSession,
+):
     text = message.text
     user_crud = UserCrud(session)
+
     users = await user_crud.get_all_users()
 
-    sent = 0
-    for u in users:
-        try:
-            await bot.send_message(u.user_id, text)
-            sent += 1
-        except:
-            pass
+    stats = await safe_broadcast(
+        bot=bot,
+        users=users,
+        text=text,
+    )
 
-    await message.answer(f"Рассылка завершена. Отправлено: {sent}")
+    await message.answer(
+        "📨 <b>Рассылка завершена</b>\n\n"
+        f"👥 Всего пользователей: <b>{stats['total']}</b>\n"
+        f"✅ Отправлено: <b>{stats['sent']}</b>\n"
+        f"🚫 Заблокировали бота: <b>{stats['blocked']}</b>\n"
+        f"⚠️ Ошибки: <b>{stats['failed']}</b>",
+        parse_mode="HTML",
+    )
+
     await state.clear()
 
 
@@ -1849,8 +1825,6 @@ async def back_to_menu(
     )
 
 
-
-
 @user_router.callback_query(F.data == "to_chek")
 async def admin_check_subscriptions(
     call: CallbackQuery,
@@ -1871,7 +1845,7 @@ async def admin_check_subscriptions(
     await call.message.answer(
         f"✅ Проверка завершена\n"
         f"📨 Уведомлено пользователей: <b>{count}</b>",
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
 
 ```
@@ -2022,9 +1996,11 @@ class ConfigMiddleware(BaseMiddleware):
 ## 📄 `tgbot\middlewares\db_session_middleware.py`
 
 ```python
-from typing import Callable, Dict, Any, Awaitable
+from collections.abc import Awaitable
+from typing import Any, Callable, Dict
+
 from aiogram import BaseMiddleware
-from sqlalchemy.ext.asyncio import AsyncSession
+
 
 class DBSessionMiddleware(BaseMiddleware):
     def __init__(self, session_factory):
@@ -2037,16 +2013,16 @@ class DBSessionMiddleware(BaseMiddleware):
         data: Dict[str, Any],
     ) -> Any:
 
-        async with self.session_factory() as session:   # <-- создаём сессию
+        async with self.session_factory() as session:  # <-- создаём сессию
             data["session"] = session
 
             try:
                 result = await handler(event, data)
-                await session.commit()                 # <-- commit правильно
+                await session.commit()  # <-- commit правильно
                 return result
 
             except Exception:
-                await session.rollback()               # <-- rollback обязательно await
+                await session.rollback()  # <-- rollback обязательно await
                 raise
 
 ```
@@ -2100,16 +2076,7 @@ async def send_message(
     disable_notification: bool = False,
     reply_markup: InlineKeyboardMarkup = None,
 ) -> bool:
-    """
-    Safe messages sender
 
-    :param bot: Bot instance.
-    :param user_id: user id. If str - must contain only digits.
-    :param text: text of the message.
-    :param disable_notification: disable notification or not.
-    :param reply_markup: reply markup.
-    :return: success.
-    """
     try:
         await bot.send_message(
             user_id,
@@ -2167,5 +2134,48 @@ async def broadcast(
         logging.info(f"{count} messages successful sent.")
 
     return count
+
+import asyncio
+from aiogram import Bot
+from aiogram.exceptions import (
+    TelegramForbiddenError,
+    TelegramRetryAfter,
+    TelegramBadRequest,
+)
+
+async def safe_broadcast(
+    *,
+    bot: Bot,
+    users: list,
+    text: str,
+    delay: float = 0.05,  # 20 msg/sec
+) -> dict:
+    sent = 0
+    blocked = 0
+    failed = 0
+
+    for user in users:
+        try:
+            await bot.send_message(user.user_id, text)
+            sent += 1
+            await asyncio.sleep(delay)
+
+        except TelegramForbiddenError:
+            blocked += 1  # бот заблокирован
+        except TelegramRetryAfter as e:
+            await asyncio.sleep(e.retry_after)
+            await bot.send_message(user.user_id, text)
+            sent += 1
+        except TelegramBadRequest:
+            failed += 1
+        except Exception:
+            failed += 1
+
+    return {
+        "sent": sent,
+        "blocked": blocked,
+        "failed": failed,
+        "total": len(users),
+    }
 
 ```

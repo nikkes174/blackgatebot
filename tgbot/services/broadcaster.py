@@ -13,16 +13,7 @@ async def send_message(
     disable_notification: bool = False,
     reply_markup: InlineKeyboardMarkup = None,
 ) -> bool:
-    """
-    Safe messages sender
 
-    :param bot: Bot instance.
-    :param user_id: user id. If str - must contain only digits.
-    :param text: text of the message.
-    :param disable_notification: disable notification or not.
-    :param reply_markup: reply markup.
-    :return: success.
-    """
     try:
         await bot.send_message(
             user_id,
@@ -80,3 +71,46 @@ async def broadcast(
         logging.info(f"{count} messages successful sent.")
 
     return count
+
+import asyncio
+from aiogram import Bot
+from aiogram.exceptions import (
+    TelegramForbiddenError,
+    TelegramRetryAfter,
+    TelegramBadRequest,
+)
+
+async def safe_broadcast(
+    *,
+    bot: Bot,
+    users: list,
+    text: str,
+    delay: float = 0.05,  # 20 msg/sec
+) -> dict:
+    sent = 0
+    blocked = 0
+    failed = 0
+
+    for user in users:
+        try:
+            await bot.send_message(user.user_id, text)
+            sent += 1
+            await asyncio.sleep(delay)
+
+        except TelegramForbiddenError:
+            blocked += 1  # бот заблокирован
+        except TelegramRetryAfter as e:
+            await asyncio.sleep(e.retry_after)
+            await bot.send_message(user.user_id, text)
+            sent += 1
+        except TelegramBadRequest:
+            failed += 1
+        except Exception:
+            failed += 1
+
+    return {
+        "sent": sent,
+        "blocked": blocked,
+        "failed": failed,
+        "total": len(users),
+    }
